@@ -428,22 +428,30 @@ app.delete('/api/bookings/:id', isAuthenticated, async (req, res) => {
 });
 
 // ====================================================================
-// 8. ANALYTICS & REPORTING ENDPOINTS
-// ====================================================================
-
 // Daily Activity Report
 app.get('/api/reports/daily', isAuthenticated, async (req, res) => {
     try {
         const [report] = await db.query(`
             SELECT 
-                rr.transaction_id, c.fullname AS customer_fullname, c.nationalid,
-                v.platenumber, v.brand, v.model, v.year, v.vehicletype,
-                rr.reservationdate, rr.startdate, rr.enddate, rr.reservationstatus,
-                rr.rentaldate, rr.returndate, rr.rentalfee, rr.rentalstatus, u.username AS processed_by
+                rr.transaction_id, 
+                c.fullname AS customer_fullname, 
+                c.phone, 
+                c.nationalid,
+                v.platenumber, 
+                v.brand, 
+                v.model, 
+                v.year, 
+                v.vehicletype,
+                rr.reservationdate, 
+                rr.reservationstatus, 
+                rr.rentaldate, 
+                rr.rentalfee, 
+                rr.rentalstatus, 
+                u.username AS processed_by
             FROM reservation_rental rr
-            JOIN customer c ON rr.customer_id = c.customer_id
-            JOIN vehicle v  ON rr.platenumber = v.platenumber
-            JOIN user u     ON rr.user_id = u.user_id
+            INNER JOIN customer c ON rr.customer_id = c.customer_id
+            INNER JOIN vehicle v  ON rr.platenumber = v.platenumber
+            INNER JOIN user u     ON rr.user_id = u.user_id
             WHERE rr.reservationdate = CURRENT_DATE() 
                OR rr.rentaldate = CURRENT_DATE() 
                OR rr.returndate = CURRENT_DATE()
@@ -451,6 +459,7 @@ app.get('/api/reports/daily', isAuthenticated, async (req, res) => {
         `);
         res.json(report);
     } catch (err) {
+        console.error("DEBUG - Daily Report Error:", err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -460,20 +469,27 @@ app.get('/api/reports/weekly', isAuthenticated, async (req, res) => {
     try {
         const [report] = await db.query(`
             SELECT 
-                YEARWEEK(rr.startdate, 0) AS report_week,
-                c.fullname AS customer_fullname, c.nationalid, v.vehicletype,
-                COUNT(rr.transaction_id) AS total_bookings_this_week,
-                SUM(rr.rentalfee) AS total_estimated_revenue,
-                SUM(CASE WHEN rr.rentalstatus IN ('Ongoing', 'Completed') THEN rr.rentalfee ELSE 0 END) AS realized_revenue
+                c.fullname AS customer_fullname, 
+                c.phone, 
+                c.nationalid,
+                v.platenumber, 
+                v.brand, 
+                v.model, 
+                v.year, 
+                v.vehicletype,
+                rr.reservationdate, 
+                rr.reservationstatus, 
+                rr.rentaldate, 
+                rr.rentalfee, 
+                rr.rentalstatus
             FROM reservation_rental rr
             JOIN customer c ON rr.customer_id = c.customer_id
             JOIN vehicle v  ON rr.platenumber = v.platenumber
             WHERE YEARWEEK(rr.startdate, 0) = YEARWEEK(CURRENT_DATE(), 0)
-            GROUP BY YEARWEEK(rr.startdate, 0), c.customer_id, c.fullname, c.nationalid, v.vehicletype
-            ORDER BY total_estimated_revenue DESC
         `);
         res.json(report);
     } catch (err) {
+        console.error("DEBUG - Weekly Report Error:", err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -483,21 +499,28 @@ app.get('/api/reports/monthly', isAuthenticated, async (req, res) => {
     try {
         const [report] = await db.query(`
             SELECT 
-                DATE_FORMAT(rr.startdate, '%Y-%m') AS report_month,
-                c.fullname AS customer_fullname, c.nationalid,
-                v.brand, v.model, v.platenumber,
-                COUNT(rr.transaction_id) AS times_rented_this_month,
-                SUM(rr.rentalfee) AS monthly_revenue_contribution
+                c.fullname AS customer_fullname, 
+                c.phone, 
+                c.nationalid,
+                v.platenumber, 
+                v.brand, 
+                v.model, 
+                v.year, 
+                v.vehicletype,
+                rr.reservationdate, 
+                rr.reservationstatus, 
+                rr.rentaldate, 
+                rr.rentalfee, 
+                rr.rentalstatus
             FROM reservation_rental rr
             JOIN customer c ON rr.customer_id = c.customer_id
             JOIN vehicle v  ON rr.platenumber = v.platenumber
-            WHERE rr.startdate >= DATE_SUB(CURRENT_DATE(), INTERVAL DAYOFMONTH(CURRENT_DATE())-1 DAY)
-              AND rr.startdate <= LAST_DAY(CURRENT_DATE())
-            GROUP BY DATE_FORMAT(rr.startdate, '%Y-%m'), c.customer_id, c.fullname, c.nationalid, v.platenumber, v.brand, v.model
-            ORDER BY monthly_revenue_contribution DESC
+            WHERE MONTH(rr.startdate) = MONTH(CURRENT_DATE())
+              AND YEAR(rr.startdate) = YEAR(CURRENT_DATE())
         `);
         res.json(report);
     } catch (err) {
+        console.error("DEBUG - Monthly Report Error:", err);
         res.status(500).json({ error: err.message });
     }
 });
